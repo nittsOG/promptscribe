@@ -1,0 +1,13 @@
+paths:
+  root: "./data"
+  logs: "./data/logs"
+  metadata: "./data/metadata"
+  analysis: "./data/analysis"
+  database: "./data/database/vault.db"
+
+ai:
+  model: "gpt-5-turbo"
+  max_tokens: 1200
+
+system:
+  encoding: "utf-8"

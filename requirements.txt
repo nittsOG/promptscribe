@@ -1,0 +1,9 @@
+click
+rich
+ptyprocess
+wexpect
+sqlalchemy
+rapidfuzz
+pyyaml
+python-dotenv
+openai

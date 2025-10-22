@@ -1,0 +1,3 @@
+[console_scripts]
+promptscribe = promptscribe.cli:main
+pv = promptscribe.cli:main

@@ -1,0 +1,16 @@
+README.md
+setup.py
+promptscribe/__init__.py
+promptscribe/analyzer.py
+promptscribe/cli.py
+promptscribe/config.py
+promptscribe/constants.py
+promptscribe/db.py
+promptscribe/logger.py
+promptscribe/utils.py
+promptscribe.egg-info/PKG-INFO
+promptscribe.egg-info/SOURCES.txt
+promptscribe.egg-info/dependency_links.txt
+promptscribe.egg-info/entry_points.txt
+promptscribe.egg-info/requires.txt
+promptscribe.egg-info/top_level.txt
