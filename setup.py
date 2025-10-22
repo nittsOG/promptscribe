@@ -18,7 +18,7 @@ setup(
     entry_points={
         "console_scripts": [
             "promptscribe=promptscribe.cli:main",
-            "pv=promptscribe.cli:main"
+            "ps=promptscribe.cli:main"
         ]
     },
     python_requires=">=3.11",
