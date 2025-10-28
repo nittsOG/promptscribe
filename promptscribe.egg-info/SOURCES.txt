@@ -7,6 +7,8 @@ promptscribe/config.py
 promptscribe/constants.py
 promptscribe/db.py
 promptscribe/logger.py
+promptscribe/recorder.py
+promptscribe/session.py
 promptscribe/utils.py
 promptscribe.egg-info/PKG-INFO
 promptscribe.egg-info/SOURCES.txt
