@@ -53,5 +53,31 @@ def view(session_id, summary, tail):
     viewer.display_session(session_id, summary=summary, tail=tail)
 
 
+@main.command()
+@click.argument("session_id")
+@click.option("--update-db", is_flag=True, help="Store summary into database.")
+def preprocess(session_id, update_db):
+    """Preprocess and summarize a session log."""
+    import os
+    from promptscribe import preprocess
+
+    db_session = db.SessionLocal()
+    entry = db_session.query(db.SessionEntry).filter(db.SessionEntry.id == session_id).first()
+    db_session.close()
+
+    if not entry:
+        click.echo(f"❌ No session found with ID: {session_id}")
+        return
+
+    path = entry.file
+    if not os.path.exists(path):
+        click.echo(f"❌ Log file missing: {path}")
+        return
+
+    click.echo(f"Preprocessing session: {session_id}")
+    preprocess.preprocess_session(path, update_db=update_db)
+    click.echo("✅ Preprocessing complete.")
+
+
 if __name__ == "__main__":
     main()
