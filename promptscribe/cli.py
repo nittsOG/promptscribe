@@ -37,10 +37,11 @@ def insert(meta_path):
 
 @main.command()
 @click.option("--limit", default=50, help="Number of entries to list.")
-def list(limit):
+@click.option("--show-missing", is_flag=True, help="Include missing or deleted file entries.")
+def list(limit, show_missing):
     """List recorded sessions."""
     click.echo(f"Listing last {limit} sessions:")
-    db.list_entries(limit=limit)
+    db.list_entries(limit=limit, show_missing=show_missing)
 
 
 @main.command()
@@ -103,6 +104,7 @@ def scrape(session_id, name, desc, out_path):
     except Exception as e:
         click.echo(f"Error: {e}")
 
+
 @main.command()
 @click.option("--limit", default=200, help="Scan last N sessions (DB order).")
 @click.option("--top", default=10, help="Show top N sessions by command count.")
@@ -114,6 +116,27 @@ def stats(limit, top, csv_out, csv_path):
     stats_mod.show_stats(limit=limit, top=top, csv_out=csv_out, csv_path=csv_path)
 
 
+@main.command()
+@click.option("--remove", is_flag=True, help="Remove orphan DB entries (missing log files).")
+def clean(remove):
+    """Find and optionally remove DB entries whose log files are missing."""
+    from promptscribe import db as dbmod
+    orphans = dbmod.clean_orphans(remove=remove)
+    if not orphans:
+        click.echo("No orphaned DB entries found.")
+        return
+    click.echo(f"Found {len(orphans)} orphaned entries:")
+    for o in orphans:
+        click.echo(f"  {o['id']}\t{o['name']}\t{o['file']}")
+    if remove:
+        click.echo("Orphaned entries removed.")
+
+
+@main.command()
+def gui():
+    """Launch the PromptScribe GUI."""
+    from promptscribe import gui
+    gui.launch_gui()
 
 
 if __name__ == "__main__":

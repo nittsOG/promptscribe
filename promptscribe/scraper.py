@@ -2,6 +2,7 @@
 import os
 import json
 import time
+import uuid
 from datetime import datetime
 from typing import Optional
 from promptscribe import db
@@ -34,22 +35,18 @@ def _load_events(log_path):
             try:
                 events.append(json.loads(ln))
             except Exception:
-                # skip malformed lines
                 continue
     return events
 
 
 def _build_raw_text(events):
-    """
-    Reconstruct raw terminal transcript preserving input/output order and spacing.
-    """
+    """Reconstruct raw terminal transcript preserving input/output order and spacing."""
     out_lines = []
     buffer_out = []
     for evt in events:
         kind = evt.get("kind")
         data = evt.get("data", "")
         if kind == "in":
-            # flush previous outputs
             if buffer_out:
                 out_lines.extend(buffer_out)
                 buffer_out = []
@@ -71,13 +68,13 @@ def export_raw(
 ):
     """
     Export raw terminal transcript for a given session.
-
     - If session_id is None → exports the most recent session.
     - `name` → optional user label used in output filename.
     - `override_desc` → optional header description override.
+    - Automatically creates .meta.json and inserts it into DB.
     - Returns absolute path to exported file.
     """
-    # fetch session
+    # --- Fetch source session ---
     DB = db.SessionLocal()
     try:
         if session_id:
@@ -94,7 +91,7 @@ def export_raw(
     events = _load_events(log_path)
     raw_text = _build_raw_text(events)
 
-    # load metadata if available
+    # --- Load metadata description if exists ---
     stored_desc = ""
     try:
         meta_file = os.path.splitext(log_path)[0] + ".meta.json"
@@ -105,32 +102,56 @@ def export_raw(
     except Exception:
         pass
 
-    # build description and header
     description = override_desc if override_desc is not None else stored_desc
+    safe_label = name or entry.name or "session"
+    safe_label = "".join(c if c.isalnum() or c in "-_" else "_" for c in safe_label)
+
+    # --- Header for export file ---
     header = (
         "# PromptScribe Raw Terminal Log\n"
-        f"# Session ID: {entry.id}\n"
-        f"# Session Name: {entry.name or ''}\n"
+        f"# Origin Session ID: {entry.id}\n"
+        f"# Export Label: {safe_label}\n"
         f"# Description: {description}\n"
         f"# Exported: {datetime.utcnow().isoformat()}Z\n\n"
     )
 
-    # prepare output file path
+    # --- Prepare output path ---
     dest_dir = _ensure_export_dir()
     if out_path:
         out_full = os.path.abspath(out_path)
         os.makedirs(os.path.dirname(out_full), exist_ok=True)
     else:
         ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        safe_label = name or entry.name or "session"
-        safe_label = "".join(c if c.isalnum() or c in "-_" else "_" for c in safe_label)
         out_full = os.path.join(dest_dir, f"{safe_label}__{entry.id}__{ts}.txt")
 
-    # atomic write
+    # --- Write export file atomically ---
     tmp_path = out_full + ".tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         fh.write(header)
         fh.write(raw_text)
     os.replace(tmp_path, out_full)
+
+    # --- Create new export metadata (unique ID) ---
+    export_session_id = f"EXP-{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    meta_data = {
+        "session_id": export_session_id,
+        "origin_session_id": entry.id,
+        "name": safe_label,
+        "file": out_full,
+        "start_ts": entry.start_ts or time.time(),
+        "end_ts": entry.end_ts or time.time(),
+        "description": description,
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+    meta_path = os.path.splitext(out_full)[0] + ".meta.json"
+    with open(meta_path, "w", encoding="utf-8") as mf:
+        json.dump(meta_data, mf, indent=2)
+
+    # --- Index export as new session in DB ---
+    try:
+        db.insert_session(meta_path)
+    except Exception as e:
+        print(f"⚠️ Warning: failed to index export in DB ({e})")
 
     return out_full
