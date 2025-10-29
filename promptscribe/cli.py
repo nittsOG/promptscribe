@@ -103,6 +103,17 @@ def scrape(session_id, name, desc, out_path):
     except Exception as e:
         click.echo(f"Error: {e}")
 
+@main.command()
+@click.option("--limit", default=200, help="Scan last N sessions (DB order).")
+@click.option("--top", default=10, help="Show top N sessions by command count.")
+@click.option("--csv", "csv_out", is_flag=True, help="Export full stats table to CSV.")
+@click.option("--csv-path", default=None, help="Custom CSV destination path (optional).")
+def stats(limit, top, csv_out, csv_path):
+    """Show aggregate stats and optionally export to CSV."""
+    from promptscribe import stats as stats_mod
+    stats_mod.show_stats(limit=limit, top=top, csv_out=csv_out, csv_path=csv_path)
+
+
 
 
 if __name__ == "__main__":
