@@ -65,15 +65,50 @@ def insert_session(meta_path):
     finally:
         db.close()
 
-def list_entries(limit=50):
+# --- Enhanced listing and cleanup ---
+def list_entries(limit=50, show_missing=False):
+    """
+    List recent session entries.
+    Skips entries whose log files are missing unless show_missing=True.
+    """
     db = SessionLocal()
     try:
         q = db.query(SessionEntry).order_by(SessionEntry.start_ts.desc()).limit(limit)
         rows = q.all()
         if not rows:
             print("No sessions indexed.")
+            return
+
         for r in rows:
-            start = r.start_ts if r.start_ts else 0
-            print(f"{r.id}\t{r.name}\t{r.file}\t{start}")
+            file_exists = bool(r.file and os.path.exists(r.file))
+            marker = "" if file_exists else " [MISSING]"
+            if file_exists or show_missing:
+                start = r.start_ts if r.start_ts else 0
+                print(f"{r.id}\t{r.name or ''}\t{r.file or ''}\t{start}{marker}")
     finally:
         db.close()
+
+def clean_orphans(remove=False):
+    """
+    Find DB entries whose log files are missing.
+    If remove=True, delete them permanently from DB.
+    Returns a list of orphan metadata dictionaries.
+    """
+    db = SessionLocal()
+    orphans = []
+    try:
+        q = db.query(SessionEntry).all()
+        for e in q:
+            if not e.file or not os.path.exists(e.file):
+                orphans.append({
+                    "id": e.id,
+                    "name": e.name,
+                    "file": e.file
+                })
+                if remove:
+                    db.delete(e)
+        if remove and orphans:
+            db.commit()
+    finally:
+        db.close()
+    return orphans
