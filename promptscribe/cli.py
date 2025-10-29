@@ -79,5 +79,31 @@ def preprocess(session_id, update_db):
     click.echo("✅ Preprocessing complete.")
 
 
+@main.command()
+@click.argument("session_id", required=False)
+@click.option("--name", default=None, help="Custom name for the exported file.")
+@click.option("--desc", default=None, help="Add or override description in export header.")
+@click.option("--out", "out_path", default=None, help="Custom output file path.")
+def scrape(session_id, name, desc, out_path):
+    """
+    Export raw terminal transcript for a session.
+
+    If session_id is omitted, the most recent session is exported.
+    Use --name to label export, --desc for description, and --out for custom path.
+    """
+    from promptscribe import scraper
+    try:
+        out = scraper.export_raw(
+            session_id=session_id,
+            name=name,
+            out_path=out_path,
+            override_desc=desc
+        )
+        click.echo(f"Exported raw log to: {out}")
+    except Exception as e:
+        click.echo(f"Error: {e}")
+
+
+
 if __name__ == "__main__":
     main()
