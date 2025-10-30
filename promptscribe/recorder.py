@@ -17,7 +17,8 @@ def _write_event(fh, kind, data):
 # Unix PTY backend
 # -------------------------
 def record_unix(outpath):
-    import pty, select
+    import pty
+    import select
 
     master, slave = pty.openpty()
     pid = os.fork()

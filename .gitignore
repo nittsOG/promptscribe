@@ -1,8 +1,58 @@
+# Virtual env
 .venv/
+venv/
+ENV/
+env/
+
+# Byte-compiled / caches
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Build artifacts
 dist/
 build/
+*.egg-info/
+pip-wheel-metadata/
+
+# Logs, coverage, test artifacts
 *.log
-data/
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local env files
 .env
+.env.*
+secrets.yaml
+*.key
+
+# Runtime data / DBs / exports (do not commit recordings)
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated docs/site
+site/
+docs/_build/
+
+# Wheels, compiled extensions
+*.whl
+*.so
+*.pyd
+
+# Misc
+*.tmp
+*.bak

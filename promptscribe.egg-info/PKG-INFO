@@ -1,15 +1,46 @@
 Metadata-Version: 2.4
 Name: promptscribe
-Version: 0.1.0
+Version: 1.0.0
+Summary: Record, manage, and analyze terminal sessions with a GUI and analytics dashboard.
+Author-email: Your Name <you@example.com>
+License: MIT
+Project-URL: Homepage, https://github.com/yourname/promptscribe
+Project-URL: Issues, https://github.com/yourname/promptscribe/issues
 Requires-Python: >=3.11
+Description-Content-Type: text/markdown
 Requires-Dist: click
 Requires-Dist: rich
 Requires-Dist: ptyprocess
-Requires-Dist: wexpect
+Requires-Dist: wexpect; platform_system == "Windows"
 Requires-Dist: sqlalchemy
 Requires-Dist: rapidfuzz
 Requires-Dist: pyyaml
 Requires-Dist: python-dotenv
 Requires-Dist: openai
-Dynamic: requires-dist
 Dynamic: requires-python
+
+# PromptScribe
+
+**PromptScribe** is a lightweight CLI + GUI toolkit to record, analyze, and manage terminal sessions.  
+It supports multi-platform environments (Linux, Windows, macOS) and is optimized for VM or container use.
+
+---
+
+## 🚀 Features
+
+- **Session Recording:** Capture shell input/output in structured JSONL format.  
+- **Database Indexing:** Store, tag, and search previous sessions via SQLite.  
+- **GUI Mode:** Visualize sessions with filters, metadata, and previews.  
+- **Analytics:** Generate per-session stats and CSV exports.  
+- **Cross-Platform:** Works with both `pty` (Unix) and `wexpect` (Windows).  
+- **Secure:** Minimal dependencies, no network calls, local-only data.
+
+---
+
+## 🧩 Installation
+
+### Option 1 — From Source (recommended for contributors)
+```bash
+git clone https://github.com/<your-username>/promptscribe.git
+cd promptscribe
+pip install -e .

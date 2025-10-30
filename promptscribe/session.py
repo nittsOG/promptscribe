@@ -2,7 +2,6 @@
 import os
 import time
 import uuid
-import json
 from promptscribe.config import CONFIG
 from promptscribe.utils import safe_write_json
 from promptscribe import recorder, db

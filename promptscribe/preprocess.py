@@ -1,8 +1,7 @@
 # promptscribe/preprocess.py
 import os
-import statistics
-from typing import Dict, Any, List
-from promptscribe import parser, db
+from typing import Dict, Any
+from promptscribe import parser
 
 
 def compute_basic_stats(parsed: Dict[str, Any]) -> Dict[str, Any]:
