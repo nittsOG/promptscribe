@@ -1,3 +1,2 @@
 [console_scripts]
 promptscribe = promptscribe.cli:main
-ps = promptscribe.cli:main

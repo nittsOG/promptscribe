@@ -1,9 +1,11 @@
 click
 rich
 ptyprocess
-wexpect
 sqlalchemy
 rapidfuzz
 pyyaml
 python-dotenv
 openai
+
+[:platform_system == "Windows"]
+wexpect

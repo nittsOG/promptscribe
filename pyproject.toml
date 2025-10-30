@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "promptscribe"
+version = "1.0.0"
+description = "Record, manage, and analyze terminal sessions with a GUI and analytics dashboard."
+readme = "README.md"
+authors = [
+  { name = "Your Name", email = "you@example.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+  "click",
+  "rich",
+  "ptyprocess",
+  "wexpect; platform_system == 'Windows'",
+  "sqlalchemy",
+  "rapidfuzz",
+  "pyyaml",
+  "python-dotenv",
+  "openai"
+]
+
+[project.urls]
+Homepage = "https://github.com/yourname/promptscribe"
+Issues = "https://github.com/yourname/promptscribe/issues"
+
+[project.scripts]
+promptscribe = "promptscribe.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["promptscribe*"]
