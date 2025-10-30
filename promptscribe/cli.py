@@ -3,45 +3,108 @@ import click
 from promptscribe import db
 from promptscribe.session import start as start_session
 
-@click.group()
-def main():
-    """PromptScribe CLI."""
-    pass
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
+@click.group(context_settings=CONTEXT_SETTINGS, invoke_without_command=True)
+@click.option("--version", is_flag=True, help="Show current PromptScribe version and exit.")
+@click.pass_context
+def main(ctx, version):
+    """
+    PromptScribe CLI - Record, manage, and analyze terminal sessions.
+
+    Usage:
+        promptscribe [COMMAND] [OPTIONS]
+
+    Command Categories:
+        Database Management
+            initdb           Initialize the local database.
+            insert           Insert session metadata into the database.
+            list             List recorded sessions.
+            clean            Remove or view orphan database entries.
+
+        Recording and Session Handling
+            record           Start a new recording session.
+            view             View or replay a recorded session.
+            preprocess       Generate summaries and process logs.
+            scrape           Export a raw terminal transcript.
+
+        Analytics and Reporting
+            stats            Show session statistics or export them to CSV.
+
+        Interface
+            gui              Launch the graphical interface.
+
+    Global Options:
+        --version           Show current version and exit.
+        -h, --help          Show this help message and exit.
+
+    Examples:
+        promptscribe record --name "demo" --desc "System setup log"
+        promptscribe list --limit 20
+        promptscribe scrape <SESSION_ID> --name "exported_log"
+        promptscribe stats --csv
+        promptscribe gui
+    """
+    if version:
+        click.echo("PromptScribe v1.0.0")
+        return
+
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+# --------------------- DATABASE COMMANDS --------------------- #
 @main.command()
 def initdb():
     """Initialize the local database."""
     click.echo("Initializing database...")
     db.init_db()
-    click.echo("Database initialized.")
-
-
-@main.command()
-@click.option("--name", default=None, help="Short name for the session.")
-@click.option("--desc", default=None, help="Short user description.")
-def record(name, desc):
-    """Start a recording session."""
-    click.echo("Starting recording session...")
-    start_session(name=name, user_description=desc, register_db=True)
+    click.echo("Database initialized successfully.")
 
 
 @main.command()
 @click.argument("meta_path", type=click.Path(exists=True))
 def insert(meta_path):
-    """Insert session metadata into DB."""
-    click.echo(f"Inserting session from {meta_path}")
+    """Insert session metadata into the database."""
+    click.echo(f"Inserting session from: {meta_path}")
     db.insert_session(meta_path)
-    click.echo("Session inserted.")
+    click.echo("Session inserted successfully.")
 
 
 @main.command()
 @click.option("--limit", default=50, help="Number of entries to list.")
-@click.option("--show-missing", is_flag=True, help="Include missing or deleted file entries.")
+@click.option("--show-missing", is_flag=True, help="Include missing/deleted entries.")
 def list(limit, show_missing):
-    """List recorded sessions."""
+    """List recorded sessions stored in the database."""
     click.echo(f"Listing last {limit} sessions:")
     db.list_entries(limit=limit, show_missing=show_missing)
+
+
+@main.command()
+@click.option("--remove", is_flag=True, help="Remove orphaned database entries.")
+def clean(remove):
+    """Find and optionally remove database entries whose log files are missing."""
+    from promptscribe import db as dbmod
+    orphans = dbmod.clean_orphans(remove=remove)
+    if not orphans:
+        click.echo("No orphaned entries found.")
+        return
+    click.echo(f"Found {len(orphans)} orphaned entries:")
+    for o in orphans:
+        click.echo(f"  {o['id']}\t{o['name']}\t{o['file']}")
+    if remove:
+        click.echo("Orphaned entries removed.")
+
+
+# --------------------- RECORDING COMMANDS --------------------- #
+@main.command()
+@click.option("--name", default=None, help="Short name for the session.")
+@click.option("--desc", default=None, help="Short user description.")
+def record(name, desc):
+    """Start a new recording session."""
+    click.echo("Starting recording session...")
+    start_session(name=name, user_description=desc, register_db=True)
 
 
 @main.command()
@@ -56,7 +119,7 @@ def view(session_id, summary, tail):
 
 @main.command()
 @click.argument("session_id")
-@click.option("--update-db", is_flag=True, help="Store summary into database.")
+@click.option("--update-db", is_flag=True, help="Store summary into the database.")
 def preprocess(session_id, update_db):
     """Preprocess and summarize a session log."""
     import os
@@ -67,17 +130,17 @@ def preprocess(session_id, update_db):
     db_session.close()
 
     if not entry:
-        click.echo(f"❌ No session found with ID: {session_id}")
+        click.echo(f"No session found with ID: {session_id}")
         return
 
     path = entry.file
     if not os.path.exists(path):
-        click.echo(f"❌ Log file missing: {path}")
+        click.echo(f"Log file missing: {path}")
         return
 
     click.echo(f"Preprocessing session: {session_id}")
     preprocess.preprocess_session(path, update_db=update_db)
-    click.echo("✅ Preprocessing complete.")
+    click.echo("Preprocessing complete.")
 
 
 @main.command()
@@ -89,8 +152,18 @@ def scrape(session_id, name, desc, out_path):
     """
     Export raw terminal transcript for a session.
 
-    If session_id is omitted, the most recent session is exported.
-    Use --name to label export, --desc for description, and --out for custom path.
+    Usage:
+        promptscribe scrape [SESSION_ID] [OPTIONS]
+
+    Options:
+        --name TEXT        Custom name for the exported file.
+        --desc TEXT        Add or override session description.
+        --out PATH         Specify custom output file path.
+
+    Examples:
+        promptscribe scrape
+        promptscribe scrape <SESSION_ID> --name mylog
+        promptscribe scrape --desc "Exported from automation run"
     """
     from promptscribe import scraper
     try:
@@ -105,39 +178,26 @@ def scrape(session_id, name, desc, out_path):
         click.echo(f"Error: {e}")
 
 
+# --------------------- ANALYTICS COMMANDS --------------------- #
 @main.command()
 @click.option("--limit", default=200, help="Scan last N sessions (DB order).")
 @click.option("--top", default=10, help="Show top N sessions by command count.")
 @click.option("--csv", "csv_out", is_flag=True, help="Export full stats table to CSV.")
 @click.option("--csv-path", default=None, help="Custom CSV destination path (optional).")
 def stats(limit, top, csv_out, csv_path):
-    """Show aggregate stats and optionally export to CSV."""
+    """Show aggregate statistics and optionally export them to CSV."""
     from promptscribe import stats as stats_mod
     stats_mod.show_stats(limit=limit, top=top, csv_out=csv_out, csv_path=csv_path)
 
 
-@main.command()
-@click.option("--remove", is_flag=True, help="Remove orphan DB entries (missing log files).")
-def clean(remove):
-    """Find and optionally remove DB entries whose log files are missing."""
-    from promptscribe import db as dbmod
-    orphans = dbmod.clean_orphans(remove=remove)
-    if not orphans:
-        click.echo("No orphaned DB entries found.")
-        return
-    click.echo(f"Found {len(orphans)} orphaned entries:")
-    for o in orphans:
-        click.echo(f"  {o['id']}\t{o['name']}\t{o['file']}")
-    if remove:
-        click.echo("Orphaned entries removed.")
-
-
+# --------------------- INTERFACE COMMAND --------------------- #
 @main.command()
 def gui():
-    """Launch the PromptScribe GUI."""
+    """Launch the PromptScribe graphical interface."""
     from promptscribe import gui
     gui.launch_gui()
 
 
+# --------------------- ENTRY POINT --------------------- #
 if __name__ == "__main__":
     main()

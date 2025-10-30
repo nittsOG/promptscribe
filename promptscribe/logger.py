@@ -47,7 +47,9 @@ def start_session(name=None):
 
 # Unix PTY implementation
 def _start_unix_session(outpath):
-    import os as _os, pty, select
+    import os as _os
+    import pty
+    import select
     master, slave = pty.openpty()
     pid = _os.fork()
     if pid == 0:
