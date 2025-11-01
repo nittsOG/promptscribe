@@ -41,6 +41,6 @@ It supports multi-platform environments (Linux, Windows, macOS) and is optimized
 
 ### Option 1 — From Source (recommended for contributors)
 ```bash
-git clone https://github.com/<your-username>/promptscribe.git
+git clone https://github.com/nittsOG/promptscribe.git
 cd promptscribe
 pip install -e .
