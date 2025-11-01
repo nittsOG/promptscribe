@@ -1,129 +1,190 @@
-# promptscribe/recorder.py
 import os
 import sys
 import time
 import json
 import subprocess
-import threading
-import queue
+import platform
+import signal
+import re
+import termios
+
+ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+STOP_CMD = "stoprec"
+KILL_CMD = ":kill"
+
+current_proc = None  # global active subprocess reference
+
+
+# -------------------------
+# Utility Functions
+# -------------------------
+def _strip_ansi(s: str) -> str:
+    return ANSI_ESCAPE_RE.sub("", s)
+
+
+def _clean_output(data: str) -> str:
+    s = ANSI_ESCAPE_RE.sub("", data)
+    s = s.replace("\b", "")
+    return s
+
 
 def _write_event(fh, kind, data):
-    evt = {"ts": time.time(), "kind": kind, "data": data}
+    clean_data = _strip_ansi(data)
+    evt = {"ts": round(time.time(), 6), "kind": kind, "data": clean_data}
     fh.write(json.dumps(evt, ensure_ascii=False) + "\n")
     fh.flush()
 
 
-# -------------------------
-# Unix PTY backend
-# -------------------------
-def record_unix(outpath):
-    import pty
-    import select
-
-    master, slave = pty.openpty()
-    pid = os.fork()
-    if pid == 0:
-        os.setsid()
-        os.dup2(slave, 0)
-        os.dup2(slave, 1)
-        os.dup2(slave, 2)
-        shell = os.environ.get("SHELL", "/bin/bash")
-        os.execvp(shell, [shell])
-    else:
-        with open(outpath, "a", encoding="utf-8") as fh:
-            try:
-                while True:
-                    r, _, _ = select.select([master], [], [])
-                    if master in r:
-                        data = os.read(master, 4096)
-                        if not data:
-                            break
-                        text = data.decode("utf-8", errors="replace")
-                        _write_event(fh, "out", text)
-                        os.write(1, data)
-            except KeyboardInterrupt:
-                pass
+def _ensure_path(outpath):
+    os.makedirs(os.path.dirname(outpath), exist_ok=True)
+    if not os.path.exists(outpath):
+        meta = {
+            "version": "2.2",
+            "platform": platform.system(),
+            "start_time": time.time(),
+        }
+        with open(outpath, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"meta": meta}) + "\n")
 
 
 # -------------------------
-# Windows subprocess backend (thread-safe)
+# Command Execution
 # -------------------------
-def record_windows(outpath):
-    shell = os.environ.get("COMSPEC", "cmd.exe")
-
-    process = subprocess.Popen(
-        shell,
-        stdin=subprocess.PIPE,
+def _run_command(command, fh):
+    """Run a single command in its own process group for clean signal control."""
+    global current_proc
+    current_proc = subprocess.Popen(
+        command,
+        shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        preexec_fn=os.setsid,  # new process group
         bufsize=1,
-        universal_newlines=True,
     )
 
-    output_queue = queue.Queue()
-    input_queue = queue.Queue()
-    stop_flag = threading.Event()
+    try:
+        for line in iter(current_proc.stdout.readline, ""):
+            cleaned = _clean_output(line)
+            sys.stdout.write(cleaned)
+            sys.stdout.flush()
+            _write_event(fh, "out", cleaned)
+    except Exception as e:
+        _write_event(fh, "error", f"cmd_output_error:{repr(e)}")
+    finally:
+        current_proc.wait()
+        current_proc = None
 
-    # --- Reader thread for stdout ---
-    def reader():
-        for line in iter(process.stdout.readline, ""):
-            output_queue.put(line)
-        stop_flag.set()
 
-    # --- Reader thread for stdin ---
-    def input_reader():
-        while not stop_flag.is_set():
-            try:
-                line = sys.stdin.readline()
-                if not line:
-                    break
-                input_queue.put(line)
-            except Exception:
-                break
-
-    threading.Thread(target=reader, daemon=True).start()
-    threading.Thread(target=input_reader, daemon=True).start()
-
-    print("Recording active. Type commands below (type 'exit' to stop):")
-
-    with open(outpath, "a", encoding="utf-8") as fh:
+def _kill_current(fh):
+    """Interrupt the running command group."""
+    global current_proc
+    if current_proc and current_proc.poll() is None:
         try:
-            while not stop_flag.is_set():
-                # Handle user input
-                while not input_queue.empty():
-                    cmd = input_queue.get()
-                    _write_event(fh, "in", cmd)
-                    if cmd.strip().lower() == "exit":
-                        process.stdin.write(cmd + "\n")
-                        process.stdin.flush()
-                        stop_flag.set()
-                        raise KeyboardInterrupt
-                    process.stdin.write(cmd)
-                    process.stdin.flush()
-
-                # Handle process output
-                while not output_queue.empty():
-                    line = output_queue.get()
-                    _write_event(fh, "out", line)
-                    sys.stdout.write(line)
-                    sys.stdout.flush()
-
-                time.sleep(0.05)
-
-        except KeyboardInterrupt:
-            print("\nRecording stopped.")
-        finally:
-            try:
-                stop_flag.set()
-                process.terminate()
-                process.wait(timeout=5)
-            except Exception:
-                pass
+            os.killpg(os.getpgid(current_proc.pid), signal.SIGINT)
+            _write_event(fh, "signal", "SIGINT_sent_to_child_group")
+            sys.stdout.write("[Interrupted current process]\n")
+            sys.stdout.flush()
+        except Exception as e:
+            _write_event(fh, "signal_error", f"SIGINT_failed:{repr(e)}")
 
 
 # -------------------------
-# Cross-platform entrypoint
+# SIGINT Handler
+# -------------------------
+def _sigint_handler(signum, frame):
+    global current_proc
+    if current_proc and current_proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(current_proc.pid), signal.SIGINT)
+        except Exception:
+            pass
+        sys.stdout.write("\n[Ctrl+C] Interrupted current command. Ready for next.]\n")
+        sys.stdout.flush()
+    else:
+        try:
+            termios.tcflush(sys.stdin, termios.TCIFLUSH)
+        except Exception:
+            pass
+        sys.stdout.write("\n[Ctrl+C received - no active process, ready for next]\n")
+        sys.stdout.flush()
+
+
+# -------------------------
+# Recording Loop (Unix)
+# -------------------------
+def record_unix(outpath):
+    _ensure_path(outpath)
+    shell_name = os.environ.get("SHELL", "/bin/bash")
+
+    # Register single handler for Ctrl+C
+    signal.signal(signal.SIGINT, _sigint_handler)
+
+    print(f"Recording active. Type commands below ({STOP_CMD} to stop, {KILL_CMD} to interrupt current command).")
+
+    with open(outpath, "a", encoding="utf-8") as fh:
+        _write_event(fh, "info", f"session_start:{shell_name}")
+        while True:
+            try:
+                sys.stdout.write(os.getcwd() + " $ ")
+                sys.stdout.flush()
+                line = sys.stdin.readline()
+                if not line:
+                    break
+
+                cmd = line.strip()
+                _write_event(fh, "in", cmd + "\n")
+
+                if cmd.lower() == STOP_CMD:
+                    _write_event(fh, "session_end", f"user_command:{STOP_CMD}")
+                    print("Session stopped.")
+                    break
+
+                if cmd.lower() == KILL_CMD:
+                    _kill_current(fh)
+                    continue
+
+                _run_command(cmd, fh)
+
+            except Exception as e:
+                _write_event(fh, "error", f"record_loop_exception:{repr(e)}")
+                break
+
+        _write_event(fh, "session_end", "normal_exit")
+
+
+# -------------------------
+# Windows Backend (simplified)
+# -------------------------
+def record_windows(outpath):
+    _ensure_path(outpath)
+    shell = os.environ.get("COMSPEC", "cmd.exe")
+    print(f"Recording active. Type commands below ({STOP_CMD} to stop, {KILL_CMD} to interrupt current command).")
+
+    with open(outpath, "a", encoding="utf-8") as fh:
+        while True:
+            sys.stdout.write("> ")
+            sys.stdout.flush()
+            line = sys.stdin.readline()
+            if not line:
+                break
+            cmd = line.strip()
+            _write_event(fh, "in", cmd + "\n")
+
+            if cmd.lower() == STOP_CMD:
+                _write_event(fh, "session_end", f"user_command:{STOP_CMD}")
+                print("Session stopped.")
+                break
+
+            if cmd.lower() == KILL_CMD:
+                _kill_current(fh)
+                continue
+
+            _run_command(cmd, fh)
+
+
+# -------------------------
+# Cross-platform Entrypoint
 # -------------------------
 def record(outpath):
     if os.name == "nt":

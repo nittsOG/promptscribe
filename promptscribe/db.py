@@ -7,20 +7,12 @@ from promptscribe.config import CONFIG
 
 # --- Step 1: Determine safe DB path ---
 try:
-    raw_path = CONFIG["paths"].get("database", "")
+    raw_path = CONFIG["paths"]["database"]
 except Exception:
-    raw_path = ""
+    raw_path = os.path.expanduser("~/Tools/promptscribe/data/database/vault.db")
 
-# Fallback: local project data folder
-base_dir = os.path.dirname(os.path.abspath(__file__))
-data_dir = os.path.join(base_dir, "data")
-os.makedirs(data_dir, exist_ok=True)
-
-if not raw_path or not os.path.isabs(raw_path):
-    DB_PATH = os.path.join(data_dir, "promptscribe.db")
-else:
-    DB_PATH = raw_path
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+DB_PATH = raw_path
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # --- Step 2: Configure SQLAlchemy ---
 engine = sa.create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
@@ -67,10 +59,7 @@ def insert_session(meta_path):
 
 # --- Enhanced listing and cleanup ---
 def list_entries(limit=50, show_missing=False):
-    """
-    List recent session entries.
-    Skips entries whose log files are missing unless show_missing=True.
-    """
+    """List recent session entries."""
     db = SessionLocal()
     try:
         q = db.query(SessionEntry).order_by(SessionEntry.start_ts.desc()).limit(limit)
@@ -89,11 +78,7 @@ def list_entries(limit=50, show_missing=False):
         db.close()
 
 def clean_orphans(remove=False):
-    """
-    Find DB entries whose log files are missing.
-    If remove=True, delete them permanently from DB.
-    Returns a list of orphan metadata dictionaries.
-    """
+    """Find DB entries whose log files are missing."""
     db = SessionLocal()
     orphans = []
     try:

@@ -1,11 +1,25 @@
 # promptscribe/cli.py
 import click
 import traceback
+import os
+import sys
 from promptscribe import db, __version__
 from promptscribe.session import start as start_session
 
-
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+
+
+# --- Utility: Ensure database file exists --- #
+def ensure_db_exists():
+    try:
+        db_path = getattr(db, "DB_PATH", os.path.join("data", "promptscribe.db"))
+        if not os.path.exists(db_path):
+            click.echo(f"Database missing at: {db_path}")
+            click.echo("Run 'promptscribe initdb' before using other commands.")
+            sys.exit(1)
+    except Exception:
+        click.echo("Database verification failed. Run 'promptscribe initdb' first.")
+        sys.exit(1)
 
 
 @click.group(context_settings=CONTEXT_SETTINGS, invoke_without_command=True)
@@ -15,33 +29,6 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 def main(ctx, version, debug):
     """
     PromptScribe CLI - Record, manage, and analyze terminal sessions.
-
-    Usage:
-        promptscribe [COMMAND] [OPTIONS]
-
-    Command Categories:
-        Database Management
-            initdb           Initialize or repair the local database.
-            insert           Insert session metadata into the database.
-            list             List recorded sessions.
-            clean            Remove or view orphan database entries.
-
-        Recording and Session Handling
-            record           Start a new recording session.
-            view             View or replay a recorded session.
-            preprocess       Generate summaries and process logs.
-            scrape           Export a raw terminal transcript.
-
-        Analytics and Reporting
-            stats            Show session statistics or export them to CSV.
-
-        Interface
-            gui              Launch the graphical interface.
-
-    Global Options:
-        --debug             Enable verbose debug tracebacks.
-        --version           Show current version and exit.
-        -h, --help          Show this help message and exit.
     """
     ctx.ensure_object(dict)
     ctx.obj["DEBUG"] = debug
@@ -74,6 +61,7 @@ def initdb(ctx):
 @click.pass_context
 def insert(ctx, meta_path):
     """Insert session metadata into the database."""
+    ensure_db_exists()
     try:
         click.echo(f"Inserting session from: {meta_path}")
         db.insert_session(meta_path)
@@ -90,6 +78,7 @@ def insert(ctx, meta_path):
 @click.pass_context
 def list(ctx, limit, show_missing):
     """List recorded sessions stored in the database."""
+    ensure_db_exists()
     try:
         click.echo(f"Listing last {limit} sessions:")
         db.list_entries(limit=limit, show_missing=show_missing)
@@ -104,6 +93,7 @@ def list(ctx, limit, show_missing):
 @click.pass_context
 def clean(ctx, remove):
     """Find and optionally remove database entries whose log files are missing."""
+    ensure_db_exists()
     try:
         from promptscribe import db as dbmod
         orphans = dbmod.clean_orphans(remove=remove)
@@ -128,6 +118,7 @@ def clean(ctx, remove):
 @click.pass_context
 def record(ctx, name, desc):
     """Start a new recording session."""
+    ensure_db_exists()
     try:
         click.echo("Starting recording session...")
         start_session(name=name, user_description=desc, register_db=True)
@@ -144,6 +135,7 @@ def record(ctx, name, desc):
 @click.pass_context
 def view(ctx, session_id, summary, tail):
     """View or replay a recorded session."""
+    ensure_db_exists()
     try:
         from promptscribe import viewer
         viewer.display_session(session_id, summary=summary, tail=tail)
@@ -159,6 +151,7 @@ def view(ctx, session_id, summary, tail):
 @click.pass_context
 def preprocess(ctx, session_id, update_db):
     """Preprocess and summarize a session log."""
+    ensure_db_exists()
     import os
     from promptscribe import preprocess
 
@@ -193,6 +186,7 @@ def preprocess(ctx, session_id, update_db):
 @click.pass_context
 def scrape(ctx, session_id, name, desc, out_path):
     """Export raw terminal transcript for a session."""
+    ensure_db_exists()
     from promptscribe import scraper
     try:
         out = scraper.export_raw(
@@ -217,6 +211,7 @@ def scrape(ctx, session_id, name, desc, out_path):
 @click.pass_context
 def stats(ctx, limit, top, csv_out, csv_path):
     """Show aggregate statistics and optionally export them to CSV."""
+    ensure_db_exists()
     try:
         from promptscribe import stats as stats_mod
         stats_mod.show_stats(limit=limit, top=top, csv_out=csv_out, csv_path=csv_path)
@@ -231,6 +226,7 @@ def stats(ctx, limit, top, csv_out, csv_path):
 @click.pass_context
 def gui(ctx):
     """Launch the PromptScribe graphical interface."""
+    ensure_db_exists()
     try:
         from promptscribe import gui
         gui.launch_gui()
