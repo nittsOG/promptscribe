@@ -23,3 +23,72 @@ It supports multi-platform environments (Linux, Windows, macOS) and is optimized
 git clone https://github.com/nittsOG/promptscribe.git
 cd promptscribe
 pip install -e .
+
+```
+
+---
+## Virtual Environment Setup 
+
+3. Create virtual environment
+python3 -m venv .venv
+
+Activate it.
+
+Linux / macOS:
+```
+source .venv/bin/activate
+```
+Windows:
+```
+.venv\Scripts\activate
+```
+You should see:
+
+(.venv)
+
+in the terminal prompt.
+
+
+---
+
+4. Install project dependencies
+
+Upgrade pip:
+```
+pip install --upgrade pip
+```
+Install requirements:
+```
+pip install -r requirements.txt
+```
+
+---
+
+5. Install the project (editable mode)
+
+Run from project root:
+```
+pip install -e .
+```
+This registers the CLI command promptscribe.
+
+Verify:
+```
+promptscribe --help
+```
+
+---
+
+6. Initialize the database
+```
+promptscribe db init
+```
+This creates:
+
+data/
+ ├── logs
+ ├── metadata
+ └── database
+
+ ---
+ 
