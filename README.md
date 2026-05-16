@@ -21,7 +21,7 @@ Current stable focus:
 - raw text export
 - GUI-based session browsing
 
-Tested primarily on Linux/Kali VM environments.
+Tested primarily on Linux VM environments.
 
 Windows and macOS support are planned/experimental and may require additional validation.
 
