@@ -21,7 +21,7 @@ Current stable focus:
 - raw text export
 - GUI-based session browsing
 
-Tested primarily in Linux Virtual Machine environments.
+Tested primarily in Linux virtual machine environments.
 
 Windows and macOS support are planned/experimental and may require additional validation.
 
